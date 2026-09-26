@@ -1,0 +1,30 @@
+[project]
+name = "vc-keeper"
+version = "1.0.0"
+description = "Keeps your Discord account parked in a voice channel, quietly."
+requires-python = ">=3.12"
+dependencies = [
+    # pinned to an audited commit of master (the PyPI release pins an old davey / DAVE voice lib)
+    "discord.py-self[voice] @ git+https://github.com/dolfies/discord.py-self@2ba64a9a997e151a9c259984e0a179b1fdf4aff4",
+]
+
+[project.scripts]
+vc-keeper = "vc_keeper.app:main"
+
+[dependency-groups]
+dev = ["ruff>=0.12", "pyright>=1.1.400"]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.12"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "RUF"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
