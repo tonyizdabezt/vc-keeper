@@ -2,6 +2,8 @@
 name = "vc-keeper"
 version = "1.0.0"
 description = "Keeps your Discord account parked in a voice channel, quietly."
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     # pinned to an audited commit of master (the PyPI release pins an old davey / DAVE voice lib)
