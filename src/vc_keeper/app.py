@@ -91,7 +91,13 @@ class Config:
 
 class VcKeeper(discord.Client):
     def __init__(self, config: Config) -> None:
-        super().__init__(afk=True, sync_presence=False, max_messages=None)
+        super().__init__(
+            afk=True,
+            sync_presence=False,
+            max_messages=None,
+            guild_subscriptions=False,
+            member_cache_flags=discord.MemberCacheFlags(joined=False),
+        )
         self.config = config
         self._wake = asyncio.Event()
         self._kicked = False

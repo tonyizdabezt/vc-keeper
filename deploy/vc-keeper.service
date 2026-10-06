@@ -32,7 +32,7 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 SystemCallArchitectures=native
 CapabilityBoundingSet=
-MemoryMax=300M
+MemoryMax=768M
 
 [Install]
 WantedBy=multi-user.target
