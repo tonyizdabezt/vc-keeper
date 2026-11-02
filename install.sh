@@ -17,7 +17,7 @@ fi
 
 say "copying app to $APP"
 mkdir -p "$APP"
-cp -r "$SRC"/pyproject.toml "$SRC"/uv.lock "$SRC"/.python-version "$SRC"/src "$APP"/
+cp -r "$SRC"/pyproject.toml "$SRC"/uv.lock "$SRC"/.python-version "$SRC"/LICENSE "$SRC"/src "$APP"/
 
 say "installing python + dependencies (locked versions)"
 cd "$APP"
