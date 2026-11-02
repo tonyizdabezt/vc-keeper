@@ -8,6 +8,7 @@ import re
 import signal
 import sys
 from dataclasses import dataclass
+from typing import Any
 
 import discord
 
@@ -20,7 +21,23 @@ EXIT_CONFIG = 78
 HEALTH_CHECK_EVERY_S = 60.0
 LIBRARY_RECONNECT_GRACE_S = 30.0
 MAX_BACKOFF_S = 60.0
+JOIN_TIMEOUT_S = 120.0
 SNOWFLAKE = re.compile(r"^\d{16,22}$")
+
+KEPT_EVENTS = frozenset(
+    {"READY", "READY_SUPPLEMENTAL", "RESUMED", "GUILD_CREATE", "VOICE_STATE_UPDATE", "VOICE_SERVER_UPDATE"}
+)
+UNUSED_READY_KEYS = (
+    "connected_accounts",
+    "experiments",
+    "guild_experiments",
+    "guild_join_requests",
+    "pending_payments",
+    "private_channels",
+    "read_state",
+    "relationships",
+    "user_guild_settings",
+)
 
 
 # --------------------------------------------------------------------------- config
@@ -86,6 +103,33 @@ class Config:
         return cls(token, guild_id, channel_id, self_deaf, cooldown_min, cooldown_max, log_level)
 
 
+# --------------------------------------------------------------------------- gateway stripping
+
+
+def _strip_ready(data: dict[str, Any]) -> None:
+    for key in UNUSED_READY_KEYS:
+        data.pop(key, None)
+
+
+def _strip_ready_supplemental(data: Any, extra: dict[str, Any], guild_id: int) -> None:
+    guilds = data.get("guilds", [])
+    index = next((i for i, guild in enumerate(guilds) if int(guild["id"]) == guild_id), len(guilds))
+    presences = extra["merged_presences"]
+
+    for container, key in (
+        (data, "guilds"),
+        (data, "merged_members"),
+        (extra, "guilds"),
+        (extra, "merged_members"),
+        (presences, "guilds"),
+    ):
+        if key in container:
+            container[key] = container[key][index : index + 1]
+
+    presences["friends"] = []
+    extra.pop("lazy_private_channels", None)
+
+
 # --------------------------------------------------------------------------- client
 
 
@@ -101,8 +145,25 @@ class VcKeeper(discord.Client):
         self.config = config
         self._wake = asyncio.Event()
         self._kicked = False
+        self._ready_seen = False
         self._supervisor: asyncio.Task[None] | None = None
         self._shutdown: asyncio.Task[None] | None = None
+        self._strip_gateway()
+
+    def _strip_gateway(self) -> None:
+        state = self._connection
+        parsers = {event: state.parsers[event] for event in KEPT_EVENTS}
+        parse_ready, parse_supplemental = parsers["READY"], parsers["READY_SUPPLEMENTAL"]
+
+        def ready(data: dict[str, Any]) -> None:
+            _strip_ready(data)
+            parse_ready(data)
+
+        def supplemental(extra: dict[str, Any]) -> None:
+            _strip_ready_supplemental(state._ready_data, extra, self.config.guild_id)
+            parse_supplemental(extra)
+
+        state.parsers = parsers | {"READY": ready, "READY_SUPPLEMENTAL": supplemental}
 
     # ---- lifecycle --------------------------------------------------------
 
@@ -124,6 +185,11 @@ class VcKeeper(discord.Client):
 
     async def on_ready(self) -> None:
         assert self.user is not None
+        if self._ready_seen:
+            log.warning("gateway session was replaced, shutting down so systemd restarts us clean")
+            self.request_shutdown()
+            return
+        self._ready_seen = True
         log.info("logged in as %s (%s)", self.user, self.user.id)
         self._wake.set()
 
@@ -177,7 +243,8 @@ class VcKeeper(discord.Client):
                     continue
 
             try:
-                await self._ensure_joined()
+                async with asyncio.timeout(JOIN_TIMEOUT_S):
+                    await self._ensure_joined()
                 failures = 0
                 log.info("in voice channel %s", self.config.channel_id)
             except (discord.ClientException, discord.HTTPException, TimeoutError, OSError) as exc:

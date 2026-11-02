@@ -33,6 +33,7 @@ LockPersonality=yes
 SystemCallArchitectures=native
 CapabilityBoundingSet=
 MemoryMax=768M
+MemorySwapMax=0
 
 [Install]
 WantedBy=multi-user.target
